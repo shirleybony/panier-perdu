@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async rewrites() {
-    return [{ source: "/", destination: "/index.html" }];
+    return {
+      beforeFiles: [{ source: "/", destination: "/index.html" }],
+    };
   },
 };
 
