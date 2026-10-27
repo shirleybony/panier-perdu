@@ -31,26 +31,35 @@ export async function POST(
   const total = Number(body.total_price ?? body.total ?? 0) || 0;
   if (!email) return NextResponse.json({ error: "Email manquant" }, { status: 400 });
 
-  // Commande passée : récupéré uniquement si une relance a déjà été envoyée
+  // Commande passée : on arrête les relances en attente.
+  // Seul le dernier panier déjà relancé est compté comme « récupéré ».
   if (event === "order") {
-    const { data: cart } = await admin
+    const { data: carts } = await admin
       .from("carts")
-      .select("id")
+      .select("id, status")
       .eq("shop_id", shopId)
       .eq("customer_email", email)
-      .eq("status", "reminded")
-      .order("abandoned_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (cart) {
+      .in("status", ["abandoned", "reminded"])
+      .order("abandoned_at", { ascending: false });
+
+    let credited = false;
+    for (const c of carts ?? []) {
+      if (c.status === "reminded" && !credited) {
+        credited = true;
+        await admin
+          .from("carts")
+          .update({
+            status: "recovered",
+            recovered_at: new Date().toISOString(),
+            recovered_amount: total,
+          })
+          .eq("id", c.id);
+      }
       await admin
-        .from("carts")
-        .update({
-          status: "recovered",
-          recovered_at: new Date().toISOString(),
-          recovered_amount: total,
-        })
-        .eq("id", cart.id);
+        .from("reminders")
+        .update({ sent_at: new Date().toISOString() })
+        .eq("cart_id", c.id)
+        .is("sent_at", null);
     }
     return NextResponse.json({ ok: true });
   }
@@ -88,3 +97,4 @@ export async function POST(
 
   return NextResponse.json({ ok: true });
 }
+
