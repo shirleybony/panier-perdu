@@ -31,14 +31,14 @@ export async function POST(
   const total = Number(body.total_price ?? body.total ?? 0) || 0;
   if (!email) return NextResponse.json({ error: "Email manquant" }, { status: 400 });
 
-  // Commande passée : on marque le dernier panier de ce client comme récupéré
+  // Commande passée : récupéré uniquement si une relance a déjà été envoyée
   if (event === "order") {
     const { data: cart } = await admin
       .from("carts")
       .select("id")
       .eq("shop_id", shopId)
       .eq("customer_email", email)
-      .in("status", ["abandoned", "reminded"])
+      .eq("status", "reminded")
       .order("abandoned_at", { ascending: false })
       .limit(1)
       .maybeSingle();
